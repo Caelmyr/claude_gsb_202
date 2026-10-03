@@ -10,7 +10,13 @@ def grayscale(image, params):
     rgb = util.ensure_rgb(image)
     if mode == "average":
         r, g, b = rgb.split()
-        avg = ImageChops.add(ImageChops.add(r, g), b).point(lambda v: v // 3)
+        # ImageChops.add 是饱和相加（>255 被截断），直接 r+g+b 会让亮部塌成 85。
+        # 先把每通道除以 3 再相加，和最大 255，不会溢出。
+        third = lambda v: v // 3
+        avg = ImageChops.add(
+            ImageChops.add(r.point(third), g.point(third)),
+            b.point(third),
+        )
         return avg.convert("L")
     if mode == "channel":
         ch = params.get("channel", "r")

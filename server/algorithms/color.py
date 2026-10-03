@@ -1,7 +1,14 @@
 """颜色算法：灰度、反转、阈值、直方图均衡、通道平衡、色调分离、伪彩色。"""
-from PIL import Image, ImageChops, ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageFilter, ImageMath, ImageOps
 
 from . import util
+
+# Pillow 10.1 起 ImageMath.eval 更名为 unsafe_eval（旧名在 12 中移除），
+# 二者语义相同：表达式在 32 位整型空间求值，不在 255 处饱和截断。
+try:
+    _imagemath = ImageMath.unsafe_eval
+except AttributeError:  # Pillow < 10.1
+    _imagemath = ImageMath.eval
 
 
 def grayscale(image, params):
@@ -10,7 +17,10 @@ def grayscale(image, params):
     rgb = util.ensure_rgb(image)
     if mode == "average":
         r, g, b = rgb.split()
-        avg = ImageChops.add(ImageChops.add(r, g), b).point(lambda v: v // 3)
+        # 不能用 ImageChops.add 先加 r+g+b：它在 255 处饱和截断，亮部会
+        # 被压暗（255,255,255 会错算成 85，正常曝光图整片发闷）。
+        # ImageMath 在 32 位整型空间求值，先完整求和再整除，全程不截断。
+        avg = _imagemath("(r + g + b) / 3", r=r, g=g, b=b)
         return avg.convert("L")
     if mode == "channel":
         ch = params.get("channel", "r")
